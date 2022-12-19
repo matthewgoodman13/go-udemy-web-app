@@ -1,0 +1,171 @@
+{{ define "stripe-js" }}
+
+    <script src="https://js.stripe.com/v3/"></script>
+    <script>
+        let card;
+        const stripe = Stripe({{ .StripePublishableKey }});
+        const cardMessages = document.getElementById('card-messages');
+        const payButton = document.getElementById('pay-button');
+        const processing = document.getElementById('processing-payment');
+
+
+        function hidePayButton() {
+            payButton.classList.add('d-none');
+            processing.classList.remove('d-none');
+        }
+
+        function showPayButtons() {
+            payButton.classList.remove('d-none');
+            processing.classList.add('d-none');
+        }
+
+        function showCardError(message) {
+            cardMessages.classList.add('alert-danger');
+            cardMessages.classList.remove('d-none');
+            cardMessages.classList.remove('alert-success');
+            cardMessages.innerHTML = message;
+        }
+
+        function showCardSuccess() {
+            cardMessages.classList.add('alert-success');
+            cardMessages.classList.remove('d-none');
+            cardMessages.classList.remove('alert-danger');
+            cardMessages.innerHTML = 'Card successfully charged';
+        }
+
+        function val() {
+            let form = document.getElementById('charge_form');
+            if (form.checkValidity() === false) {
+                this.event.preventDefault();
+                this.event.stopPropagation();
+                form.classList.add('was-validated');
+                return;
+            }
+            form.classList.add('was-validated');
+            hidePayButton();
+
+            let amountToCharge = document.getElementById('amount').value;
+
+            let payload = {
+                amount: amountToCharge,
+                currency: 'cad',
+            };
+
+            const requestOptions = {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            };
+
+            // Fetch to api
+            fetch("{{.API}}/api/payment-intent", requestOptions)
+                .then(response => response.text())
+                .then(response => {
+                    let data;
+                    try {
+                        data = JSON.parse(response);
+                        stripe.confirmCardPayment(data.client_secret, {
+                            payment_method: {
+                                card: card,
+                                billing_details: {
+                                    name: document.getElementById('cardholder-name').value,
+                                    email: document.getElementById('cardholder-email').value,
+                                }
+                            }                            
+                        }).then((result) => {
+                            if (result.error) {
+                                // card declined or something wrong with the card
+                                showCardError(result.error.message)
+                                showPayButtons();
+                            } else if (result.paymentIntent) {
+                                if (result.paymentIntent.status === 'succeeded') {
+                                    // payment succeeded and card charged
+                                    showCardSuccess('Payment succeeded');
+                                    document.getElementById('payment_method').value = result.paymentIntent.payment_method_types[0];
+                                    document.getElementById('payment_intent').value = result.paymentIntent.id;
+                                    document.getElementById('payment_amount').value = result.paymentIntent.amount;
+                                    document.getElementById('payment_currency').value = result.paymentIntent.currency;
+
+                                    processing.classList.add('d-none');
+                                    showCardSuccess();
+                                    
+                                    // Submit form
+                                    setTimeout(function() {
+                                        document.getElementById('charge_form').submit();
+                                    }, 350);
+
+                                } else {
+                                    // payment failed
+                                    showCardError('Invalid response from payment gateway');
+                                    showPayButtons();
+                                }
+                            }
+                        })
+                    } catch (e) {
+                        console.log(e);
+                        return;
+                    }
+                })
+
+        }
+
+        (function() {
+            // Create stripe client & elements
+            const elements = stripe.elements();
+            const style = {
+                base: {
+                    color: '#32325d',
+                    fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+                    fontSmoothing: 'antialiased',
+                    fontSize: '16px',
+                    '::placeholder': {
+                        color: '#aab7c4'
+                    },
+                    lineHeight: '24px'
+                },
+                invalid: {
+                    color: '#fa755a',
+                    iconColor: '#fa755a'
+                }
+            };
+
+            card = elements.create('card', {
+                style: style,
+                hidePostalCode: true,
+            });
+            card.mount('#card-element');
+
+            card.addEventListener('change', function(event) {
+                const displayError = document.getElementById('card-errors');
+                if (event.error) {
+                    displayError.textContent = event.error.message;
+                    displayError.classList.remove('d-none');
+                } else {
+                    displayError.textContent = '';
+                    displayError.classList.add('d-none');
+                }
+            });
+
+            const form = document.getElementById('charge_form');
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+
+                stripe.createToken(card).then(function(result) {
+                    if (result.error) {
+                        // Inform the user if there was an error.
+                        const errorElement = document.getElementById('card-errors');
+                        errorElement.textContent = result.error.message;
+                    } else {
+                        // Send the token to your server.
+                        stripeTokenHandler(result.token);
+                    }
+                });
+            });
+        })();
+
+    </script>
+
+{{ end }}

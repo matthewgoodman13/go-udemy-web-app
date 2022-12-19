@@ -1,0 +1,7 @@
+development:
+  dialect: mysql
+  database: widgets
+  user: matthewgoodman13
+  password: matthew
+  host: 127.0.0.1
+  pool: 5
