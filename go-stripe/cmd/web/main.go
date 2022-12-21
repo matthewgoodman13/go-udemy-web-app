@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"html/template"
@@ -10,10 +11,14 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/alexedwards/scs/v2"
 )
 
 const version = "1.0.0"
 const cssVersion = "1"
+
+var session *scs.SessionManager
 
 type config struct {
 	port int
@@ -35,6 +40,7 @@ type application struct {
 	templateCache map[string]*template.Template
 	version       string
 	DB            models.DBModel
+	Session       *scs.SessionManager
 }
 
 func (app *application) serve() error {
@@ -52,6 +58,8 @@ func (app *application) serve() error {
 }
 
 func main() {
+	gob.Register(TransactionData{}) // Register map for session data
+
 	var cfg config
 
 	// Read command line flags
@@ -78,6 +86,10 @@ func main() {
 	// Close connection when main() exits
 	defer conn.Close()
 
+	// Setup Session
+	session = scs.New()
+	session.Lifetime = 24 * time.Hour
+
 	// Create map for template cache
 	tc := make(map[string]*template.Template)
 
@@ -89,6 +101,7 @@ func main() {
 		templateCache: tc,
 		version:       version,
 		DB:            models.DBModel{DB: conn},
+		Session:       session,
 	}
 
 	err = app.serve()

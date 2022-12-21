@@ -10,7 +10,7 @@
 
     <div class="alert alert-danger text-center d-none" id="card-messages" role="alert"></div>
 
-    <form action="/payment-succeeded" method="post" name="charge_form" id="charge_form" class="d-block needs-validation charge-form" autocomplete="off" novalidate="">
+    <form action="/virtual-terminal-payment-succeeded" method="post" name="charge_form" id="charge_form" class="d-block needs-validation charge-form" autocomplete="off" novalidate="">
 
         <div class="mb-3">
             <label for="charge_amount" class="form-label">Amount</label>
@@ -60,7 +60,7 @@
     <script>
         // Add event listener that updates hidden amount input field when charge amount is changed
         document.getElementById("charge_amount").addEventListener("keyup", function(e) {
-            document.getElementById("amount").value = (e.target.value !== "") ? e.target.value * 100 : 0;
+            document.getElementById("amount").value = (e.target.value !== "") ? parseInt(e.target.value * 100, 10) : 0;
             console.log(document.getElementById("amount").value);
         });
     </script>

@@ -1,1 +1,1 @@
-add_column("widgets", "image")
+drop_column("widgets", "image")
