@@ -273,3 +273,27 @@ func (app *application) ChargeOnce(w http.ResponseWriter, r *http.Request) {
 		app.errorLog.Println(err)
 	}
 }
+
+// Displays page to buy Bronze plan subscription
+func (app *application) BronzePlan(w http.ResponseWriter, r *http.Request) {
+
+	widget, err := app.DB.GetWidget(2)
+	if err != nil {
+		app.errorLog.Println(err)
+		return
+	}
+
+	data := make(map[string]interface{})
+	data["widget"] = widget
+
+	if err := app.renderTemplate(w, r, "bronze-plan", &templateData{Data: data}, "stripe-js"); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// Displays the receipt page for subscription transactions
+func (app *application) BronzePlanReceipt(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "receipt-plan", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
