@@ -1,0 +1,106 @@
+{{ template "base" . }}
+
+{{ define "title" }}
+    Login
+{{ end }}
+
+{{ define "content" }}
+    
+    <form action="/login" method="post" name="login_form" id="login_form" class="d-block needs-validation charge-form" autocomplete="off" novalidate="">
+        <div class="d-flex justify-content-center mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="mt-2 mb-3 text-center">Login</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required="" autocomplete="email-new">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" required="" autocomplete="password-new">
+                        </div>
+
+                        <hr />
+                        <div class="alert alert-danger text-center d-none" id="login-messages" role="alert"></div>
+                        <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Login</a>
+                        <p class="mt-2"><small><a href="/forgot-password">Forgot Password?</a></small></p>
+                    </div>
+                </div>
+            </div>
+    </form>
+
+{{ end }}
+
+{{ define "js" }}
+
+    <script>
+
+        let loginMessages = document.getElementById('login-messages');
+
+        function val() {
+            let form = document.getElementById('login_form');
+            var email = document.getElementById("email").value;
+            var password = document.getElementById("password").value;
+
+            if (form.checkValidity() === false) {
+                this.event.preventDefault();
+                this.event.stopPropagation();
+                form.classList.add('was-validated');
+                return;
+            }
+            form.classList.add('was-validated');
+
+            let payload = {
+                email: email,
+                password: password,
+            };
+
+            const requestOptions = {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            };
+
+            // Fetch to api
+            fetch("{{.API}}/api/authenticate", requestOptions)
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data)
+                    if (data.error === false) {
+                        localStorage.setItem('token', data.authentication_token.token);
+                        localStorage.setItem('token_expiry', data.authentication_token.expiry);
+                        showSuccess();
+                        setTimeout(() => {
+                            document.getElementById('login_form').submit();
+                        }, 250);
+
+                    } else {
+                        showError(data.message);
+                    }
+                })
+        }
+
+        function showError(message) {
+            loginMessages.classList.add('alert-danger');
+            loginMessages.classList.remove('d-none');
+            loginMessages.classList.remove('alert-success');
+            loginMessages.innerHTML = message;
+        }
+
+        function showSuccess() {
+            loginMessages.classList.add('alert-success');
+            loginMessages.classList.remove('d-none');
+            loginMessages.classList.remove('alert-danger');
+            loginMessages.innerHTML = 'Login Successful';
+        }
+
+    </script>
+
+{{ end }}

@@ -3,7 +3,11 @@ package models
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // DBModel is the type for database connection values
@@ -39,15 +43,18 @@ type Widget struct {
 
 // Order is the type for all orders
 type Order struct {
-	ID            int       `json:"id"`
-	WidgetID      int       `json:"widget_id"`
-	TransactionID int       `json:"transaction_id"`
-	CustomerID    int       `json:"customer_id"`
-	StatusID      int       `json:"status_id"`
-	Quantity      int       `json:"quantity"`
-	Amount        int       `json:"amount"`
-	CreatedAt     time.Time `json:"-"`
-	UpdatedAt     time.Time `json:"-"`
+	ID            int         `json:"id"`
+	WidgetID      int         `json:"widget_id"`
+	TransactionID int         `json:"transaction_id"`
+	CustomerID    int         `json:"customer_id"`
+	StatusID      int         `json:"status_id"`
+	Quantity      int         `json:"quantity"`
+	Amount        int         `json:"amount"`
+	CreatedAt     time.Time   `json:"-"`
+	UpdatedAt     time.Time   `json:"-"`
+	Widget        Widget      `json:"widget"`
+	Transaction   Transaction `json:"transaction"`
+	Customer      Customer    `json:"customer"`
 }
 
 // Status is the type for all order statuses
@@ -225,4 +232,281 @@ func (m *DBModel) InsertCustomer(customer Customer) (int, error) {
 	}
 
 	return int(id), nil
+}
+
+// GetUserByEmail returns a user based on the email address
+func (m *DBModel) GetUserByEmail(email string) (User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	email = strings.ToLower(email)
+	var u User
+
+	query := `SELECT id, first_name, last_name, email, password, created_at, updated_at FROM users WHERE email = ?`
+	row := m.DB.QueryRowContext(ctx, query, email)
+
+	err := row.Scan(
+		&u.ID,
+		&u.FirstName,
+		&u.LastName,
+		&u.Email,
+		&u.Password,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+
+	if err != nil {
+		return u, err
+	}
+
+	return u, nil
+}
+
+// Authenticate
+func (m *DBModel) Authenticate(email, password string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	email = strings.ToLower(email)
+	var id int
+	var hashedPassword string
+
+	query := `SELECT id, password FROM users WHERE email = ?`
+	row := m.DB.QueryRowContext(ctx, query, email)
+
+	err := row.Scan(&id, &hashedPassword)
+	if err != nil {
+		return 0, err
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	if err != nil {
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			return 0, errors.New("incorrect password")
+		}
+		return 0, err
+	}
+
+	return id, nil
+}
+
+// Update Password
+func (m *DBModel) UpdatePasswordForUser(user User, hashed_password string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `UPDATE users SET password = ? WHERE id = ?`
+
+	_, err := m.DB.ExecContext(ctx, query, hashed_password, user.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetAllOrders returns all orders
+func (m *DBModel) GetAllOrders() ([]*Order, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var orders []*Order
+
+	query := `
+		SELECT 
+			o.id, o.widget_id, o.transaction_id, o.customer_id, o.status_id, o.quantity, o.amount, o.created_at, o.updated_at,
+			w.id, w.name,
+			t.id, t.amount, t.currency, t.last_four, t.expiry_month, t.expiry_year, t.payment_intent, t.bank_return_code,
+			c.id, c.first_name, c.last_name, c.email
+			
+		FROM
+			orders o 
+			LEFT JOIN widgets w on (o.widget_id = w.id)
+			LEFT JOIN transactions t on (o.transaction_id = t.id)
+			LEFT JOIN customers c on (o.customer_id = c.id)
+			
+		WHERE
+			w.is_recurring = 0
+			
+		ORDER BY o.created_at DESC 
+	`
+
+	rows, err := m.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var o Order
+
+		err := rows.Scan(
+			&o.ID,
+			&o.WidgetID,
+			&o.TransactionID,
+			&o.StatusID,
+			&o.Quantity,
+			&o.CustomerID,
+			&o.Amount,
+			&o.CreatedAt,
+			&o.UpdatedAt,
+			&o.Widget.ID,
+			&o.Widget.Name,
+			&o.Transaction.ID,
+			&o.Transaction.Amount,
+			&o.Transaction.Currency,
+			&o.Transaction.LastFour,
+			&o.Transaction.ExpiryMonth,
+			&o.Transaction.ExpiryYear,
+			&o.Transaction.PaymentIntent,
+			&o.Transaction.BankReturnCode,
+			&o.Customer.ID,
+			&o.Customer.FirstName,
+			&o.Customer.LastName,
+			&o.Customer.Email,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		orders = append(orders, &o)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+
+// GetAllSubscriptions returns all subscriptions
+func (m *DBModel) GetAllSubscriptions() ([]*Order, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var orders []*Order
+
+	query := `
+		SELECT 
+			o.id, o.widget_id, o.transaction_id, o.customer_id, o.status_id, o.quantity, o.amount, o.created_at, o.updated_at,
+			w.id, w.name,
+			t.id, t.amount, t.currency, t.last_four, t.expiry_month, t.expiry_year, t.payment_intent, t.bank_return_code,
+			c.id, c.first_name, c.last_name, c.email
+			
+		FROM
+			orders o 
+			LEFT JOIN widgets w on (o.widget_id = w.id)
+			LEFT JOIN transactions t on (o.transaction_id = t.id)
+			LEFT JOIN customers c on (o.customer_id = c.id)
+			
+		WHERE
+			w.is_recurring = 1
+			
+		ORDER BY o.created_at DESC 
+	`
+
+	rows, err := m.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var o Order
+
+		err := rows.Scan(
+			&o.ID,
+			&o.WidgetID,
+			&o.TransactionID,
+			&o.StatusID,
+			&o.Quantity,
+			&o.CustomerID,
+			&o.Amount,
+			&o.CreatedAt,
+			&o.UpdatedAt,
+			&o.Widget.ID,
+			&o.Widget.Name,
+			&o.Transaction.ID,
+			&o.Transaction.Amount,
+			&o.Transaction.Currency,
+			&o.Transaction.LastFour,
+			&o.Transaction.ExpiryMonth,
+			&o.Transaction.ExpiryYear,
+			&o.Transaction.PaymentIntent,
+			&o.Transaction.BankReturnCode,
+			&o.Customer.ID,
+			&o.Customer.FirstName,
+			&o.Customer.LastName,
+			&o.Customer.Email,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		orders = append(orders, &o)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+
+// GetOrderById returns a single order by id
+func (m *DBModel) GetOrderById(id int) (*Order, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var o Order
+
+	query := `
+		SELECT 
+			o.id, o.widget_id, o.transaction_id, o.customer_id, o.status_id, o.quantity, o.amount, o.created_at, o.updated_at,
+			w.id, w.name,
+			t.id, t.amount, t.currency, t.last_four, t.expiry_month, t.expiry_year, t.payment_intent, t.bank_return_code,
+			c.id, c.first_name, c.last_name, c.email
+			
+		FROM
+			orders o 
+			LEFT JOIN widgets w on (o.widget_id = w.id)
+			LEFT JOIN transactions t on (o.transaction_id = t.id)
+			LEFT JOIN customers c on (o.customer_id = c.id)
+			
+		WHERE
+			o.id = ?
+	`
+
+	row := m.DB.QueryRowContext(ctx, query, id)
+
+	err := row.Scan(
+		&o.ID,
+		&o.WidgetID,
+		&o.TransactionID,
+		&o.StatusID,
+		&o.Quantity,
+		&o.CustomerID,
+		&o.Amount,
+		&o.CreatedAt,
+		&o.UpdatedAt,
+		&o.Widget.ID,
+		&o.Widget.Name,
+		&o.Transaction.ID,
+		&o.Transaction.Amount,
+		&o.Transaction.Currency,
+		&o.Transaction.LastFour,
+		&o.Transaction.ExpiryMonth,
+		&o.Transaction.ExpiryYear,
+		&o.Transaction.PaymentIntent,
+		&o.Transaction.BankReturnCode,
+		&o.Customer.ID,
+		&o.Customer.FirstName,
+		&o.Customer.LastName,
+		&o.Customer.Email,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &o, nil
 }

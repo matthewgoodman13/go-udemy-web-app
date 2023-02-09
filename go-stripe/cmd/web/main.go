@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/alexedwards/scs/mysqlstore"
 	"github.com/alexedwards/scs/v2"
 )
 
@@ -31,6 +32,8 @@ type config struct {
 		secret string
 		key    string
 	}
+	secretkey string
+	frontend  string
 }
 
 type application struct {
@@ -68,6 +71,9 @@ func main() {
 	flag.StringVar(&cfg.db.dsn, "dsn", "matthewgoodman13:matthew@tcp(localhost:3306)/widgets?parseTime=true&tls=false", "DSN for database connection")
 	flag.StringVar(&cfg.api, "api", "http://localhost:4001", "URL to api")
 
+	flag.StringVar(&cfg.secretkey, "secret", "x6Z2c9H5F1B8g7L9A3p7D1W8k2E6h3R9", "Secret Key")
+	flag.StringVar(&cfg.frontend, "frontend", "http://localhost:4000", "URL to frontend")
+
 	flag.Parse()
 
 	// Retrieve stripe key and secret from environment variables
@@ -89,6 +95,7 @@ func main() {
 	// Setup Session
 	session = scs.New()
 	session.Lifetime = 24 * time.Hour
+	session.Store = mysqlstore.New(conn)
 
 	// Create map for template cache
 	tc := make(map[string]*template.Template)

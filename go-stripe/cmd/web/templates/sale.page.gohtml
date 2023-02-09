@@ -1,0 +1,96 @@
+{{ template "base" .}}
+
+{{ define "title" }}
+    {{index .StringMap "title"}}
+{{ end }}
+
+{{ define "content" }}
+
+    <br />
+    <h2 class="mt-5>">{{index .StringMap "title"}} Information</h2>
+    <hr />
+
+    {{/* Sale Information */}}
+    <div class="row">
+        <div class="col-md-6">
+            <table class="table table-striped">
+                <tbody>
+                    <tr>
+                        <th scope="row">Order ID</th>
+                        <td id="order_id"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Customer Name</th>
+                        <td id="customer_name"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Product Name</th>
+                        <td id="product_name"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Quantity</th>
+                        <td id="quantity"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Amount</th>
+                        <td id="amount"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <a href='{{index .StringMap "return_url"}}' class="btn btn-primary btn-block">Return</a>
+            <a href="/admin/refund/" class="btn btn-warning btn-block">Refund Order</a>
+            
+        </div>
+    </div>
+   
+{{ end }}
+
+{{ define "js" }}
+    <script>
+        let token = localStorage.getItem("token");
+        let id = window.location.pathname.split("/").pop();
+
+        let order_id = document.getElementById("order_id");
+        let customer_name = document.getElementById("customer_name");
+        let product_name = document.getElementById("product_name");
+        let quantity = document.getElementById("quantity");
+        let amount = document.getElementById("amount");
+
+
+        const requestOptions = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": "Bearer " + token
+            }
+        };
+
+        fetch("{{ .API }}/api/admin/get-sale/" + id, requestOptions)
+            .then(response => response.json())
+            .then(data => {
+                if (data == null) { return; }
+
+                order_id.innerHTML = data.id;
+                customer_name.innerHTML = `${data.customer.first_name} ${data.customer.last_name}`;
+                product_name.innerHTML = data.widget.name;
+                quantity.innerHTML = data.quantity;
+                amount.innerHTML = formatCurrency(data.transaction.amount);
+            })
+            .catch(error => {
+                console.log(error);
+            });
+
+
+
+        function formatCurrency(amount) {
+            let c = parseFloat(amount / 100);
+            return c.toLocaleString("en-CA", {
+                style: "currency",
+                currency: "CAD"
+            });
+        }
+
+    </script>
+{{ end }}

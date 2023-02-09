@@ -23,6 +23,14 @@ type config struct {
 		secret string
 		key    string
 	}
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+	}
+	secretkey string // to sign URLs
+	frontend  string
 }
 
 type application struct {
@@ -54,6 +62,14 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4001, "Server listening port")
 	flag.StringVar(&cfg.db.dsn, "dsn", "matthewgoodman13:matthew@tcp(localhost:3306)/widgets?parseTime=true&tls=false", "DSN for database connection")
 	flag.StringVar(&cfg.env, "env", "development", "Application environment (development|production|maintenance)")
+
+	flag.StringVar(&cfg.smtp.host, "smtphost", "sandbox.smtp.mailtrap.io", "Host for smtp server")
+	flag.IntVar(&cfg.smtp.port, "smtpport", 587, "Port for smtp server")
+	flag.StringVar(&cfg.smtp.username, "smtpusername", "a0e5ee79037570", "Username for smtp server")
+	flag.StringVar(&cfg.smtp.password, "smtppassword", "87d6f0e74a890a", "Password for smtp server")
+
+	flag.StringVar(&cfg.secretkey, "secret", "x6Z2c9H5F1B8g7L9A3p7D1W8k2E6h3R9", "Secret Key")
+	flag.StringVar(&cfg.frontend, "frontend", "http://localhost:4000", "URL to frontend")
 
 	flag.Parse()
 

@@ -1,0 +1,77 @@
+{{ template "base" .}}
+
+{{ define "title" }}
+    All Sales
+{{ end }}
+
+{{ define "content" }}
+
+    <h2 class="mt-5">All Subscriptions</h2>
+    <hr />
+
+    {{/* Creates Sales Table */}}
+    <table id="sales-table" class="table table-striped table-bordered table-hover">
+        <thead class="thead-dark">
+            <tr>
+                <th scope="col">Transaction ID</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Product</th>
+                <th scope="col">Amount</th>
+            </tr>
+        </thead>
+        <tbody></tbody>   
+
+{{ end }}
+
+{{ define "js" }}
+    <script>
+        let token = localStorage.getItem("token");
+        let salesTable = document.getElementById("sales-table");
+        let tBody = salesTable.getElementsByTagName("tbody")[0];
+
+        const requestOptions = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": "Bearer " + token
+            }
+        };
+
+        fetch("{{ .API }}/api/admin/all-subscriptions", requestOptions)
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                data.forEach(sale => {
+                    let row = tBody.insertRow();
+                    let cell1 = row.insertCell(0);
+                    let cell2 = row.insertCell(1);
+                    let cell3 = row.insertCell(2);
+                    let cell4 = row.insertCell(3);
+                    cell1.innerHTML = `<a href='/admin/subscriptions/${sale.transaction.id}'>Transaction ${sale.transaction.id}</a>`;
+                    cell2.innerHTML = `${sale.customer.first_name} ${sale.customer.last_name}`;
+                    cell3.innerHTML = sale.widget.name;
+                    cell4.innerHTML = `${formatCurrency(sale.transaction.amount)}/month`;
+                });
+            })
+            .catch(error => {
+                console.log(error);
+
+                let row = tBody.insertRow();
+                let cell1 = row.insertCell(0);
+                cell1.innerHTML = "No Data Available";
+                cell1.colSpan = 4;
+            });
+
+
+
+        function formatCurrency(amount) {
+            let c = parseFloat(amount / 100);
+            return c.toLocaleString("en-CA", {
+                style: "currency",
+                currency: "CAD"
+            });
+        }
+
+    </script>
+{{ end }}

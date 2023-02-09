@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"myapp/internal/cards"
+	"myapp/internal/encryption"
 	"myapp/internal/models"
+	"myapp/internal/urlsigner"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,7 +22,7 @@ func (app *application) Home(w http.ResponseWriter, r *http.Request) {
 
 // Displays the virtual terminal page
 func (app *application) VirtualTerminal(w http.ResponseWriter, r *http.Request) {
-	if err := app.renderTemplate(w, r, "terminal", &templateData{}, "stripe-js"); err != nil {
+	if err := app.renderTemplate(w, r, "terminal", &templateData{}); err != nil {
 		app.errorLog.Println(err)
 	}
 }
@@ -294,6 +297,124 @@ func (app *application) BronzePlan(w http.ResponseWriter, r *http.Request) {
 // Displays the receipt page for subscription transactions
 func (app *application) BronzePlanReceipt(w http.ResponseWriter, r *http.Request) {
 	if err := app.renderTemplate(w, r, "receipt-plan", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// Authentication Handlers
+// LoginPage displays the login page
+func (app *application) LoginPage(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "login", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// PostLoginPage handles the login form submission
+func (app *application) PostLoginPage(w http.ResponseWriter, r *http.Request) {
+	app.Session.RenewToken(r.Context())
+
+	err := r.ParseForm()
+	if err != nil {
+		app.errorLog.Println(err)
+		return
+	}
+
+	email := r.Form.Get("email")
+	password := r.Form.Get("password")
+
+	id, err := app.DB.Authenticate(email, password)
+	if err != nil || id == 0 {
+		http.Redirect(w, r, "/user/login", http.StatusSeeOther)
+		return
+	}
+
+	app.Session.Put(r.Context(), "userID", id)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// Logout handles the logout request
+func (app *application) Logout(w http.ResponseWriter, r *http.Request) {
+	app.Session.Destroy(r.Context())
+	app.Session.RenewToken(r.Context())
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// ForgotPassword displays the forgot password page
+func (app *application) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "forgot-password", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// ShowResetPassword displays the reset password page
+func (app *application) ShowResetPassword(w http.ResponseWriter, r *http.Request) {
+	theURL := r.RequestURI
+	testURL := fmt.Sprintf("%s%s", app.config.frontend, theURL)
+	email := r.URL.Query().Get("email")
+
+	// Check if the URL is valid and not expired
+	signer := urlsigner.Signer{
+		Secret: []byte(app.config.secretkey),
+	}
+	if !signer.VerifyToken(testURL) {
+		app.errorLog.Println("Invalid URL - tampering detected")
+		return
+	}
+	if signer.Expired(testURL, 60) {
+		app.errorLog.Println("URL expired")
+		return
+	}
+
+	// Encrypt the email
+	encryptor := encryption.Encryption{
+		Key: []byte(app.config.secretkey),
+	}
+	encryptedEmail, err := encryptor.Encrypt(email)
+	if err != nil {
+		app.errorLog.Println(err)
+		return
+	}
+
+	data := make(map[string]interface{})
+	data["email"] = encryptedEmail
+
+	if err := app.renderTemplate(w, r, "reset-password", &templateData{Data: data}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// AllSales displays all sales
+func (app *application) AllSales(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "all-sales", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// AllSubscriptions displays all subscriptions
+func (app *application) AllSubscriptions(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "all-subscriptions", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// ShowSale displays a sale
+func (app *application) ShowSale(w http.ResponseWriter, r *http.Request) {
+	stringMap := make(map[string]string)
+	stringMap["title"] = "Sale"
+	stringMap["return_url"] = "/admin/all-sales"
+
+	if err := app.renderTemplate(w, r, "sale", &templateData{StringMap: stringMap}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+// ShowSubscription displays a subscription
+func (app *application) ShowSubscription(w http.ResponseWriter, r *http.Request) {
+	stringMap := make(map[string]string)
+	stringMap["title"] = "Subscription"
+	stringMap["return_url"] = "/admin/all-subscriptions"
+
+	if err := app.renderTemplate(w, r, "sale", &templateData{StringMap: stringMap}); err != nil {
 		app.errorLog.Println(err)
 	}
 }
