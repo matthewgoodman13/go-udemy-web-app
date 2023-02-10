@@ -26,3 +26,7 @@
 - Using MailTrap to create a fake email server / fake inbox
 
 - View sales and subsriptions in dashboard
+
+- Refund payments both single purchases and subscriptions
+
+- Pagination / chunking of data (like all sales/transactions)

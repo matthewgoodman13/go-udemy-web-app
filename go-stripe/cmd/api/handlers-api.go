@@ -145,7 +145,6 @@ func (app *application) CreateCustomerAndSubscribeToPlan(w http.ResponseWriter, 
 			okay = false
 			txnMsg = "Subscription failed"
 		}
-		app.infoLog.Println("Subscription ID: ", subscription.ID)
 	}
 
 	if okay {
@@ -167,6 +166,8 @@ func (app *application) CreateCustomerAndSubscribeToPlan(w http.ResponseWriter, 
 			ExpiryMonth:         data.ExpiryMonth,
 			ExpiryYear:          data.ExpiryYear,
 			TransactionStatusID: 2,
+			PaymentIntent:       subscription.ID,
+			PaymentMethod:       data.PaymentMethod,
 		}
 
 		txnId, err := app.SaveTransaction(txn)
@@ -530,13 +531,38 @@ func (app *application) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 // AllSales returns all sales
 func (app *application) AllSales(w http.ResponseWriter, r *http.Request) {
-	sales, err := app.DB.GetAllOrders()
+	var payload struct {
+		PageSize    int `json:"page_size"`
+		CurrentPage int `json:"current_page"`
+	}
+
+	err := app.readJSON(w, r, &payload)
 	if err != nil {
 		app.badRequest(w, r, err)
 		return
 	}
 
-	_ = app.writeJSON(w, http.StatusOK, sales)
+	sales, lastPage, numRecords, err := app.DB.GetAllOrdersPaginated(payload.PageSize, payload.CurrentPage)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	var res struct {
+		CurrentPage  int             `json:"current_page"`
+		PageSize     int             `json:"page_size"`
+		LastPage     int             `json:"last_page"`
+		TotalRecords int             `json:"total_records"`
+		Orders       []*models.Order `json:"orders"`
+	}
+
+	res.CurrentPage = payload.CurrentPage
+	res.PageSize = payload.PageSize
+	res.LastPage = lastPage
+	res.TotalRecords = numRecords
+	res.Orders = sales
+
+	_ = app.writeJSON(w, http.StatusOK, res)
 }
 
 // AllSubscriptions returns all subscriptions
@@ -566,4 +592,100 @@ func (app *application) GetSale(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = app.writeJSON(w, http.StatusOK, sale)
+}
+
+// RefundCharge refunds a charge
+func (app *application) RefundCharge(w http.ResponseWriter, r *http.Request) {
+
+	var chargeToRefund struct {
+		ID            int    `json:"id"`
+		PaymentIntent string `json:"pi"`
+		Amount        int    `json:"amount"`
+		Currency      string `json:"currency"`
+	}
+
+	err := app.readJSON(w, r, &chargeToRefund)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	// TODO: Validate amount and currency and other checks
+	// TODO: Assume user is admin
+
+	card := cards.Card{
+		Secret:   app.config.stripe.secret,
+		Key:      app.config.stripe.key,
+		Currency: chargeToRefund.Currency,
+	}
+
+	// Refund charge
+	err = card.RefundPayment(chargeToRefund.PaymentIntent, chargeToRefund.Amount)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	// Update status database
+	err = app.DB.UpdateOrderStatus(chargeToRefund.ID, 2)
+	if err != nil {
+		app.badRequest(w, r, errors.New("charge refunded but database not updated"))
+		return
+	}
+
+	var res struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}
+
+	res.Error = false
+	res.Message = "Charge refunded successfully"
+
+	_ = app.writeJSON(w, http.StatusOK, res)
+}
+
+// CancelSubscription cancels a subscription
+func (app *application) CancelSubscription(w http.ResponseWriter, r *http.Request) {
+
+	var subToCancel struct {
+		ID            int    `json:"id"`
+		PaymentIntent string `json:"pi"`
+		Currency      string `json:"currency"`
+	}
+
+	err := app.readJSON(w, r, &subToCancel)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	card := cards.Card{
+		Secret:   app.config.stripe.secret,
+		Key:      app.config.stripe.key,
+		Currency: subToCancel.Currency,
+	}
+
+	// Cancel subscription
+	err = card.CancelSubscription(subToCancel.PaymentIntent)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	// Update status database
+	err = app.DB.UpdateOrderStatus(subToCancel.ID, 3)
+	if err != nil {
+		app.badRequest(w, r, errors.New("subscription cancelled but database not updated"))
+		return
+	}
+
+	var res struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}
+
+	res.Error = false
+	res.Message = "Subscription cancelled successfully"
+
+	_ = app.writeJSON(w, http.StatusOK, res)
 }

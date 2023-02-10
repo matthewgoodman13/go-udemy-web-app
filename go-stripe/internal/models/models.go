@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -344,9 +345,9 @@ func (m *DBModel) GetAllOrders() ([]*Order, error) {
 			&o.ID,
 			&o.WidgetID,
 			&o.TransactionID,
+			&o.CustomerID,
 			&o.StatusID,
 			&o.Quantity,
-			&o.CustomerID,
 			&o.Amount,
 			&o.CreatedAt,
 			&o.UpdatedAt,
@@ -377,6 +378,100 @@ func (m *DBModel) GetAllOrders() ([]*Order, error) {
 	}
 
 	return orders, nil
+}
+
+// GetAllOrdersPaginated returns a slice of a subset of orders
+func (m *DBModel) GetAllOrdersPaginated(pageSize, page int) ([]*Order, int, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	offset := (page - 1) * pageSize
+
+	var orders []*Order
+
+	query := `
+		SELECT 
+			o.id, o.widget_id, o.transaction_id, o.customer_id, o.status_id, o.quantity, o.amount, o.created_at, o.updated_at,
+			w.id, w.name,
+			t.id, t.amount, t.currency, t.last_four, t.expiry_month, t.expiry_year, t.payment_intent, t.bank_return_code,
+			c.id, c.first_name, c.last_name, c.email
+			
+		FROM
+			orders o 
+			LEFT JOIN widgets w on (o.widget_id = w.id)
+			LEFT JOIN transactions t on (o.transaction_id = t.id)
+			LEFT JOIN customers c on (o.customer_id = c.id)
+			
+		WHERE
+			w.is_recurring = 0
+			
+		ORDER BY o.created_at DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := m.DB.QueryContext(ctx, query, pageSize, offset)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var o Order
+
+		err := rows.Scan(
+			&o.ID,
+			&o.WidgetID,
+			&o.TransactionID,
+			&o.CustomerID,
+			&o.StatusID,
+			&o.Quantity,
+			&o.Amount,
+			&o.CreatedAt,
+			&o.UpdatedAt,
+			&o.Widget.ID,
+			&o.Widget.Name,
+			&o.Transaction.ID,
+			&o.Transaction.Amount,
+			&o.Transaction.Currency,
+			&o.Transaction.LastFour,
+			&o.Transaction.ExpiryMonth,
+			&o.Transaction.ExpiryYear,
+			&o.Transaction.PaymentIntent,
+			&o.Transaction.BankReturnCode,
+			&o.Customer.ID,
+			&o.Customer.FirstName,
+			&o.Customer.LastName,
+			&o.Customer.Email,
+		)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+
+		orders = append(orders, &o)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, 0, 0, err
+	}
+
+	query = `
+		SELECT COUNT(o.id) 
+		FROM 
+			orders o
+			LEFT JOIN widgets w on (o.widget_id = w.id)
+		WHERE 
+			w.is_recurring = 0
+	`
+
+	var numRecords int
+	err = m.DB.QueryRowContext(ctx, query).Scan(&numRecords)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	lastPage := int(math.Ceil(float64(numRecords) / float64(pageSize)))
+
+	return orders, lastPage, numRecords, nil
 }
 
 // GetAllSubscriptions returns all subscriptions
@@ -418,9 +513,9 @@ func (m *DBModel) GetAllSubscriptions() ([]*Order, error) {
 			&o.ID,
 			&o.WidgetID,
 			&o.TransactionID,
+			&o.CustomerID,
 			&o.StatusID,
 			&o.Quantity,
-			&o.CustomerID,
 			&o.Amount,
 			&o.CreatedAt,
 			&o.UpdatedAt,
@@ -483,9 +578,9 @@ func (m *DBModel) GetOrderById(id int) (*Order, error) {
 		&o.ID,
 		&o.WidgetID,
 		&o.TransactionID,
+		&o.CustomerID,
 		&o.StatusID,
 		&o.Quantity,
-		&o.CustomerID,
 		&o.Amount,
 		&o.CreatedAt,
 		&o.UpdatedAt,
@@ -504,9 +599,27 @@ func (m *DBModel) GetOrderById(id int) (*Order, error) {
 		&o.Customer.LastName,
 		&o.Customer.Email,
 	)
+
 	if err != nil {
 		return nil, err
 	}
 
 	return &o, nil
+}
+
+// UpdateOrderStatus updates the status of an order
+func (m *DBModel) UpdateOrderStatus(id, statusID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `
+		UPDATE orders SET status_id = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?
+	`
+
+	_, err := m.DB.ExecContext(ctx, query, statusID, id)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

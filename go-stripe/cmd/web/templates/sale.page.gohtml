@@ -8,7 +8,12 @@
 
     <br />
     <h2 class="mt-5>">{{index .StringMap "title"}} Information</h2>
+    <span id="charged" class="badge bg-success d-none">Charged</span>
+    <span id="refunded" class="badge bg-danger d-none">Refunded</span>
+    <span id="cancelled" class="badge bg-danger d-none">Cancelled</span>
     <hr />
+
+    <div class="alert alert-danger text-center d-none" id="messages" role="alert"></div>
 
     {{/* Sale Information */}}
     <div class="row">
@@ -38,8 +43,13 @@
                 </tbody>
             </table>
 
-            <a href='{{index .StringMap "return_url"}}' class="btn btn-primary btn-block">Return</a>
-            <a href="/admin/refund/" class="btn btn-warning btn-block">Refund Order</a>
+            <a href='{{index .StringMap "return-url"}}' class="btn btn-primary btn-block">Return</a>
+            <a id="refund-btn" class="btn btn-warning btn-block d-none">{{index .StringMap "refund-btn"}}</a>
+
+            {{/* Hidden fields */}}
+            <input type="hidden" id="pi" value="" />
+            <input type="hidden" id="charge-amount" value="" />
+            <input type="hidden" id="charge-currency" value="" />
             
         </div>
     </div>
@@ -50,6 +60,8 @@
     <script>
         let token = localStorage.getItem("token");
         let id = window.location.pathname.split("/").pop();
+        let refundBtn = document.getElementById("refund-btn");
+        let messages = document.getElementById("messages");
 
         let order_id = document.getElementById("order_id");
         let customer_name = document.getElementById("customer_name");
@@ -57,6 +69,13 @@
         let quantity = document.getElementById("quantity");
         let amount = document.getElementById("amount");
 
+        let pi = document.getElementById("pi");
+        let chargeAmount = document.getElementById("charge-amount");
+        let chargeCurrency = document.getElementById("charge-currency");
+
+        let successBadge = document.getElementById("charged");
+        let refundedBadge = document.getElementById("refunded");
+        let cancelledBadge = document.getElementById("cancelled");
 
         const requestOptions = {
             method: "POST",
@@ -77,12 +96,101 @@
                 product_name.innerHTML = data.widget.name;
                 quantity.innerHTML = data.quantity;
                 amount.innerHTML = formatCurrency(data.transaction.amount);
+
+                pi.value = data.transaction.payment_intent;
+                chargeAmount.value = data.transaction.amount;
+                chargeCurrency.value = data.transaction.currency;
+
+                if (data.status_id === 2) {
+                    refundedBadge.classList.remove("d-none");
+                    refundBtn.classList.add("d-none");
+                } else if (data.status_id === 3) {
+                    cancelledBadge.classList.remove("d-none");
+                    refundBtn.classList.add("d-none");
+                } else {
+                    successBadge.classList.remove("d-none");
+                    refundBtn.classList.remove("d-none");
+                }
+
+
             })
             .catch(error => {
                 console.log(error);
             });
+        
+        refundBtn.addEventListener("click", function(e) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You won't be able to undo this!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: '{{index .StringMap "refund-btn"}}'
+                }).then((result) => {
+                if (result.isConfirmed) {
 
+                    let payload = {
+                        pi: pi.value,
+                        currency: chargeCurrency.value,
+                        amount: parseInt(chargeAmount.value, 10),
+                        id: parseInt(id, 10)
+                    }
 
+                     const refundRequestOptions = {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "Authorization": "Bearer " + token
+                        },
+                        body: JSON.stringify(payload)
+                    };
+
+                    fetch("{{.API}}{{index .StringMap "refund-url"}}", refundRequestOptions)
+                        .then(response => response.json())
+                        .then(data => {
+                        console.log(data)
+                            if (data == null) { return; }
+                            if (data.error != null && data.error) throw data.message;
+                             Swal.fire({
+                                title: 'Refunded!',
+                                text: `{{index .StringMap "refund-success-msg"}}`,
+                                icon: 'success',
+                                confirmButtonText: 'Ok'
+                            }).then((result) => {
+                                window.location.reload();
+                            })
+                        })
+                        .catch(error => {
+                            console.log(error);
+                            Swal.fire({
+                                title: 'Error!',
+                                html: `
+                                    <p>There was an error refunding transaction</p>
+                                `,
+                                icon: 'error',
+                                confirmButtonText: 'Ok'
+                            })
+                        });     
+                }
+            })
+        });
+
+        function showError(msg) {
+            messages.classList.remove("d-none");
+            messages.classList.remove("alert-success")
+            messages.classList.add("alert-danger")
+            messages.innerHTML = msg;
+        }
+
+        function showSuccess(msg) {
+            messages.classList.remove("d-none");
+            messages.classList.remove("alert-danger");
+            messages.classList.add("alert-success");
+            messages.innerHTML = msg;
+        }
 
         function formatCurrency(amount) {
             let c = parseFloat(amount / 100);

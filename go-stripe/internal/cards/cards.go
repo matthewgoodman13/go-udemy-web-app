@@ -5,6 +5,7 @@ import (
 	"github.com/stripe/stripe-go/v72/customer"
 	"github.com/stripe/stripe-go/v72/paymentintent"
 	"github.com/stripe/stripe-go/v72/paymentmethod"
+	"github.com/stripe/stripe-go/v72/refund"
 	"github.com/stripe/stripe-go/v72/sub"
 )
 
@@ -121,6 +122,39 @@ func (c *Card) CreateCustomer(pm string, email string) (*stripe.Customer, string
 	}
 
 	return cust, "", nil
+}
+
+// Refund a payment
+func (c *Card) RefundPayment(pi string, amount int) error {
+	stripe.Key = c.Secret
+
+	params := &stripe.RefundParams{
+		PaymentIntent: stripe.String(pi),
+		Amount:        stripe.Int64(int64(amount)),
+	}
+
+	_, err := refund.New(params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CancelSubscription cancels a subscription
+func (c *Card) CancelSubscription(subscriptionID string) error {
+	stripe.Key = c.Secret
+
+	params := &stripe.SubscriptionParams{
+		CancelAtPeriodEnd: stripe.Bool(true),
+	}
+
+	_, err := sub.Update(subscriptionID, params)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // cardErrorMessage returns a user-friendly error message for a given Stripe error code.

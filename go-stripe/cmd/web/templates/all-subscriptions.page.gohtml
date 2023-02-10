@@ -17,9 +17,11 @@
                 <th scope="col">Customer</th>
                 <th scope="col">Product</th>
                 <th scope="col">Amount</th>
+                <th scope="col">Status</th>
             </tr>
         </thead>
         <tbody></tbody>   
+    </table>
 
 {{ end }}
 
@@ -41,17 +43,21 @@
         fetch("{{ .API }}/api/admin/all-subscriptions", requestOptions)
             .then(response => response.json())
             .then(data => {
-                console.log(data);
                 data.forEach(sale => {
                     let row = tBody.insertRow();
                     let cell1 = row.insertCell(0);
                     let cell2 = row.insertCell(1);
                     let cell3 = row.insertCell(2);
                     let cell4 = row.insertCell(3);
+                    let cell5 = row.insertCell(4);
+
                     cell1.innerHTML = `<a href='/admin/subscriptions/${sale.transaction.id}'>Transaction ${sale.transaction.id}</a>`;
                     cell2.innerHTML = `${sale.customer.first_name} ${sale.customer.last_name}`;
                     cell3.innerHTML = sale.widget.name;
                     cell4.innerHTML = `${formatCurrency(sale.transaction.amount)}/month`;
+                    cell5.innerHTML = (sale.status_id != 3) 
+                        ? `<span class="badge bg-success">Charged</span>` 
+                        : `<span class="badge bg-danger">Cancelled</span>`;
                 });
             })
             .catch(error => {
