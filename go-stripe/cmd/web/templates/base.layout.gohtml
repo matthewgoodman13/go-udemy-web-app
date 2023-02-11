@@ -48,10 +48,11 @@
                 <div class="dropdown-divider"></div>
                 <a class="dropdown-item" href="/admin/all-sales">All Sales</a>
                 <a class="dropdown-item" href="/admin/all-subscriptions">All Subscriptions</a>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item" href="/admin/all-users">All Users</a>
               </div>
             </li>
           {{ end }}
-
         </ul>
 
         <ul class="navbar-nav ms-auto">
@@ -81,6 +82,41 @@
     
     <script>
       let loginLink = document.getElementById("login-link");
+
+      {{ if eq .IsAuthenticated 1 }}
+      let socket;
+
+          document.addEventListener("DOMContentLoaded", function(e) {
+              socket = new WebSocket("ws://localhost:4000/ws"); // wss if production
+
+              socket.onopen = () => {
+                  console.log("Websocket Connection established!");
+              };
+
+              socket.onclose = () => {
+                  console.log("Websocket Connection closed!");
+              };
+
+              socket.onerror = (err) => {
+                  console.log("Websocket Connection error: ", err);
+              };
+
+              socket.onmessage = (msg) => {
+                  let data = JSON.parse(msg.data);
+                  console.log("Websocket Message: ", data);
+
+                  switch (data.action) {
+                      case "logout":
+                          if (data.user_id === {{ .UserID }}) {
+                              logout();
+                          }
+                          break;
+                      default:
+                          break;
+                  }
+              };
+          });
+      {{ end }}
 
       document.addEventListener("DOMContentLoaded", function(event) {
         if ({{ .IsAuthenticated }} === 0) {

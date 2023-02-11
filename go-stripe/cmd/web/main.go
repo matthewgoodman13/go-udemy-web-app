@@ -116,4 +116,7 @@ func main() {
 		app.errorLog.Println(err)
 		log.Fatal(err)
 	}
+
+	// Start Websocket
+	go app.ListenToWsChannel()
 }

@@ -30,3 +30,6 @@
 - Refund payments both single purchases and subscriptions
 
 - Pagination / chunking of data (like all sales/transactions)
+
+- Manage admins
+

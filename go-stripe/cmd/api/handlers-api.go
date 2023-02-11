@@ -689,3 +689,123 @@ func (app *application) CancelSubscription(w http.ResponseWriter, r *http.Reques
 
 	_ = app.writeJSON(w, http.StatusOK, res)
 }
+
+// AllUsers returns all users
+func (app *application) AllUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := app.DB.GetAllUsers()
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	_ = app.writeJSON(w, http.StatusOK, users)
+}
+
+// OneUser returns a user
+func (app *application) OneUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	user, err := app.DB.GetOneUser(userID)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	_ = app.writeJSON(w, http.StatusOK, user)
+}
+
+// EditUser edits a user
+func (app *application) EditUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	var user models.User
+
+	err = app.readJSON(w, r, &user)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	if userID > 0 {
+		// Editing existing user
+		err = app.DB.EditUser(user)
+		if err != nil {
+			app.badRequest(w, r, err)
+			return
+		}
+
+		if user.Password != "" {
+			// Password changed
+			newHash, err := bcrypt.GenerateFromPassword([]byte(user.Password), 12)
+			if err != nil {
+				app.badRequest(w, r, err)
+				return
+			}
+
+			err = app.DB.UpdatePasswordForUser(user, string(newHash))
+			if err != nil {
+				app.badRequest(w, r, err)
+				return
+			}
+		}
+	} else {
+		// Adding new user
+		newHash, err := bcrypt.GenerateFromPassword([]byte(user.Password), 12)
+		if err != nil {
+			app.badRequest(w, r, err)
+			return
+		}
+
+		err = app.DB.AddUser(user, string(newHash))
+		if err != nil {
+			app.badRequest(w, r, err)
+			return
+		}
+	}
+
+	var res struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}
+
+	res.Error = false
+	res.Message = "User updated successfully"
+
+	_ = app.writeJSON(w, http.StatusOK, res)
+}
+
+// DeleteUser deletes a user
+func (app *application) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	err = app.DB.DeleteUser(userID)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	var res struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}
+
+	res.Error = false
+	res.Message = "User deleted successfully"
+
+	_ = app.writeJSON(w, http.StatusOK, res)
+}

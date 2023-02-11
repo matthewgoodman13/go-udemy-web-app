@@ -1,0 +1,219 @@
+{{ template "base" . }}
+
+{{ define "title" }}
+    Admin User
+{{ end }}
+
+{{ define "content" }}
+
+    <h2 class="mt-5">Admin User</h2>
+    <hr />
+
+    <form method="post" action="" name="user_form" id="user_form" class="needs_validation" autocomplete="off" novalidate="">
+        <div class="mb-3">
+            <label for="first_name">First Name</label>
+            <input type="text" class="form-control" id="first_name" name="first_name" required="" autocomplete="first_name-new" />
+        </div>
+
+        <div class="mb-3">
+            <label for="last_name">Last Name</label>
+            <input type="text" class="form-control" id="last_name" name="last_name" required="" autocomplete="last_name-new" />
+        </div>
+
+        <div class="mb-3">
+            <label for="email">Email</label>
+            <input type="email" class="form-control" id="email" name="email" required="" autocomplete="email-new" />
+        </div>
+
+        <div class="mb-3">
+            <label for="password">Password</label>
+            <input type="password" class="form-control" id="password" name="password" autocomplete="new-password" />
+        </div>
+
+        <div class="mb-3">
+            <label for="verify_password">Confirm Password</label>
+            <input type="password" class="form-control" id="verify_password" name="verify_password" autocomplete="new-password" />
+        </div>
+
+        <hr />
+
+        <div class="float-start">
+            <a href="javascript:void(0);" id="saveBtn" class="btn btn-primary" onclick="val()">Save Changes</a>
+            <a href="javascript:void(0);" id="cancelBtn" class="btn btn-secondary">Cancel</a>
+        </div>
+        <div class="float-end">
+            <a href="javascript:void(0);" id="deleteBtn" class="btn btn-danger d-none">Delete</a>
+        </div>
+
+
+    </form>
+
+{{ end }}
+
+{{ define "js" }}
+    <script>
+        let token = localStorage.getItem("token");
+        let id = window.location.pathname.split("/").pop();
+
+        var form = document.getElementById("user_form");
+        var first_name = document.getElementById("first_name");
+        var last_name = document.getElementById("last_name");
+        var email = document.getElementById("email");
+        var password = document.getElementById("password");
+        var verify_password = document.getElementById("verify_password");
+
+        var saveBtn = document.getElementById("saveBtn");
+        var cancelBtn = document.getElementById("cancelBtn");
+        var deleteBtn = document.getElementById("deleteBtn");
+
+        function val() {
+            if (form.checkValidity() === false) {
+                event.preventDefault();
+                event.stopPropagation();
+                form.classList.add("was-validated");
+                return
+            }
+            form.classList.add("was-validated");
+
+            if (password.value !== verify_password.value) {
+                Swal.fire({
+                    title: 'Error!',
+                    html: `
+                        <p>Passwords do not match</p>
+                    `,
+                    icon: 'error',
+                    confirmButtonText: 'Ok'
+                })
+                return
+            }
+
+            let payload = {
+                id: parseInt(id),
+                first_name: first_name.value,
+                last_name: last_name.value,
+                email: email.value,
+                password: password.value,
+            }
+
+            const requestOptions = {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify(payload)
+            }
+
+            fetch('{{ .API }}/api/admin/all-users/edit/' + id, requestOptions)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        Swal.fire({
+                            title: 'Error!',
+                            html: `
+                                <p>${data.message}</p>
+                            `,
+                            icon: 'error',
+                            confirmButtonText: 'Ok'
+                        })
+                    } else {
+                        location.href = "/admin/all-users";
+                    }
+                })
+                .catch(error => {
+                    console.log(error);
+                });
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+           
+            if (id !== "0") { // Fetch User
+
+                if (parseInt(id) !== parseInt("{{ .UserID }}")) {
+                    deleteBtn.classList.remove("d-none");
+                }
+
+                const requestOptions = {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "Authorization": "Bearer " + token
+                    },
+                }
+                
+
+                fetch('{{ .API }}/api/admin/all-users/' + id, requestOptions)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data) {
+                            first_name.value = data.first_name;
+                            last_name.value = data.last_name;
+                            email.value = data.email;
+                        }
+                    })
+                    .catch(error => {
+                        console.log(error);
+                    });
+            }
+            else { // New User
+            }
+        });
+
+
+        cancelBtn.addEventListener("click", function() {
+            window.location.href = "/admin/all-users";
+        });
+
+        deleteBtn.addEventListener("click", function(e) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You won't be able to undo this!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Delete User'
+                }).then((result) => {
+                if (result.isConfirmed) {
+
+                     const deleteRequestOptions = {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "Authorization": "Bearer " + token
+                        },
+                    };
+
+                    fetch("{{.API}}/api/admin/all-users/delete/" + id, deleteRequestOptions)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                Swal.fire({
+                                    title: 'Error!',
+                                    html: `
+                                        <p>${data.message}</p>
+                                    `,
+                                    icon: 'error',
+                                    confirmButtonText: 'Ok'
+                                })
+                            } else {
+                                let jsonData = {
+                                    action: "deleteUser",
+                                    user_id: parseInt(id)
+                                }
+                                socket.send(JSON.stringify(jsonData));
+
+                                location.href = "/admin/all-users";
+                            }
+                        })
+                }
+            })
+        });
+
+
+    </script>
+{{ end }}
