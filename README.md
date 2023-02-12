@@ -1,7 +1,19 @@
 # Building Web Applications with Go - Udemy
 ## Course
-- https://www.udemy.com/course/building-web-applications-with-go-intermediate-level
+- Course: https://www.udemy.com/course/building-web-applications-with-go-intermediate-level
 - Certificate of Completion: https://www.udemy.com/certificate/UC-8dfd1688-edcf-47aa-b5ea-bf12f18329e9/
+
+## The Project
+- Built an E-commerce application consisting of a front-end, back-end, and a microservice all built using the Go (or Golang) programming language. Used MariaDB as database solution and DBeaver as the database navigator.
+- Platform allows customers to buy or subscribe to receive “Widgets” using Stripe Payment Integration
+    - Added Virtual Terminal to receive credit card info and charge a user (as if over the phone)
+    - Added Checkout to allow customer to buy directly off website or subscribe to a package
+- Created Invoice Microservice that emails a PDF invoice after completion of a purchase
+- Authentication done via Stateful Tokens and using private routes
+- Forgot/Reset Password functionality using email reset link via protected hash in email
+- Used MailTrap to create a fake email server / fake inbox
+- Created Admin dashboard that displays purchases and subscriptions with pagination/chunking of data and ability to create/delete adminstrative accounts
+- Added socket integration to logout “deleted” users automatically
 
 ## Running the Project
 - cd into go-stripe directory
@@ -12,31 +24,3 @@
     - make start or make start_front or make start_back
     - make stop or make stop_front or make stop_back
     - make start_invoice or make stop_invoice to start/stop invoice microservice
-
-## Notes
-- Backend database navigator = dbeaver
-
-- Virtual terminal - charge credit card from form (as if over the phone)
-- Buy from online store - checkout
-- Stripe payment integration
-- Server and client side
-
-- Authentication using Stateful Tokens from both client and server
-- Private routes
-
-- Forgot Password via email reset link and expiry via hash in email
-- Reset password via link and email is encrypted
-- Using MailTrap to create a fake email server / fake inbox
-
-- View sales and subsriptions in dashboard
-
-- Refund payments both single purchases and subscriptions
-
-- Pagination / chunking of data (like all sales/transactions)
-
-- Manage admins
-
-- Sockets to logout deleted users
-
-- Microservice to generate invoices and send emails
-
