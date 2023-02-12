@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"myapp/internal/cards"
 	"myapp/internal/encryption"
@@ -138,6 +141,17 @@ func (app *application) VirtualTerminalPaymentSucceeded(w http.ResponseWriter, r
 	http.Redirect(w, r, "/virtual-terminal-receipt", http.StatusSeeOther)
 }
 
+type Invoice struct {
+	ID        int       `json:"id"`
+	Quantity  int       `json:"quantity"`
+	Amount    int       `json:"amount"`
+	Product   string    `json:"product"`
+	CreatedAt time.Time `json:"created_at"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+}
+
 // PaymentSucceeded displays receipt page for store checkout transactions
 func (app *application) PaymentSucceeded(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -190,15 +204,65 @@ func (app *application) PaymentSucceeded(w http.ResponseWriter, r *http.Request)
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
-	_, err = app.SaveOrder(order)
+	orderID, err := app.SaveOrder(order)
 	if err != nil {
 		app.errorLog.Println(err)
 		return
 	}
 
+	// Call Invoice Microservice
+	invoice := Invoice{
+		ID:        orderID,
+		Quantity:  order.Amount,
+		Product:   "Widget",
+		Amount:    order.Amount,
+		FirstName: txnData.FirstName,
+		LastName:  txnData.LastName,
+		Email:     txnData.Email,
+		CreatedAt: time.Now(),
+	}
+
+	err = app.callInvoiceMicroservice(invoice)
+	if err != nil {
+		app.errorLog.Println(err)
+	}
+
 	// Write data to session and redirect user to new page
 	app.Session.Put(r.Context(), "receipt", txnData)
 	http.Redirect(w, r, "/receipt", http.StatusSeeOther)
+}
+
+// callInvoiceMicroservice calls the invoice microservice
+func (app *application) callInvoiceMicroservice(invoice Invoice) error {
+	// Encode the invoice data as JSON
+	json, err := json.MarshalIndent(invoice, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	// Create a new POST request to the invoice microservice
+	req, err := http.NewRequest("POST", "http://localhost:5000/invoice/create-and-send", bytes.NewBuffer(json))
+	if err != nil {
+		return err
+	}
+
+	// Set Header
+	req.Header.Set("Content-Type", "application/json")
+
+	// Create a new HTTP client and send the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check the response status code
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("invoice microservice returned non-200 status code")
+	}
+
+	return nil
 }
 
 // Displays the receipt page for virtual terminal transactions

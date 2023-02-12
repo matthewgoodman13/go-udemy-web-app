@@ -33,3 +33,7 @@
 
 - Manage admins
 
+- Sockets to logout deleted users
+
+- Microservice to generate invoices and send emails
+
